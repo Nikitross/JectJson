@@ -118,8 +118,8 @@ More [examples](https://github.com/Nikitross/JectJson/tree/main/example) are ava
 This project uses RapidJSON (https://github.com/Tencent/rapidjson),
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-JectJson license 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+JectJson license (https://github.com/Nikitross/JectJson/tree/main/license.txt)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 <!--
 Keywords: JSON parser, C++ JSON library, lightweight JSON, embedded JSON, JSON for IoT, JSON reader, JSON writer, JSON manipulation , rapidjson , cplusplus, json-library, cpp17, json
