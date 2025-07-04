@@ -120,3 +120,7 @@ This project uses RapidJSON (https://github.com/Tencent/rapidjson),
 
 JectJson license 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+<!--
+Keywords: JSON parser, C++ JSON library, lightweight JSON, embedded JSON, JSON for IoT, JSON reader, JSON writer, JSON manipulation , rapidjson , cplusplus, json-library, cpp17, json
+-->
