@@ -57,57 +57,57 @@ static void ErrHandl(const char *message, const char *details) {
 }
 
 int main() {
-    
-    	JsonCpp json;
-		json.RegisterCallback_onError(&ErrHandl);
 		
-		// READ + WRITE + CREATE
-		if (!json.Open("jectjson_examle.json", JsonCpp::FileAccess::RWA)) {
-			fprintf(stderr, "Error - Open json file.");
-		}
+	JsonCpp json;
+	json.RegisterCallback_onError(&ErrHandl);
+	
+	// READ + WRITE + CREATE
+	if (!json.Open("jectjson_examle.json", JsonCpp::FileAccess::RWA)) {
+		fprintf(stderr, "Error - Open json file.");
+	}
 
-		json.AddObject("projects");
-		json.Key("projects").AddObject("configs");
-		json.Key("projects").Key("configs").AddObjectsArray("config", 3);
+	json.AddObject("projects");
+	json.Key("projects").AddObject("configs");
+	json.Key("projects").Key("configs").AddObjectsArray("config", 3);
 
-		json.Key("projects").Key("configs").Key("config", 0).AddValue("id", 1);
-		json.Key("projects").Key("configs").Key("config", 0).AddValue("name", "config name");
-		json.Key("projects").Key("configs").Key("config", 0).AddValue("dev", "usb");
+	json.Key("projects").Key("configs").Key("config", 0).AddValue("id", 1);
+	json.Key("projects").Key("configs").Key("config", 0).AddValue("name", "config name");
+	json.Key("projects").Key("configs").Key("config", 0).AddValue("dev", "usb");
 
-		json.Key("projects").Key("configs").Key("config", 1).AddValue("id", "2");
-		json.Key("projects").Key("configs").Key("config", 2).AddValue("id", 3.433333333);
+	json.Key("projects").Key("configs").Key("config", 1).AddValue("id", "2");
+	json.Key("projects").Key("configs").Key("config", 2).AddValue("id", 3.433333333);
 
-		std::string data1[] = { "data1","data2","data3" };
-		json.Key("projects").Key("configs").Key("config", 0).AddArray("data", data1, 3);
+	std::string data1[] = { "data1","data2","data3" };
+	json.Key("projects").Key("configs").Key("config", 0).AddArray("data", data1, 3);
 
-		json.PrintIt();
+	json.PrintIt();
 
-		std::cout << "get int id: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<int>("id") << std::endl;
-		std::cout << "get string id: " << json.Key("projects").Key("configs").Key("config", 1).GetValue<std::string>("id") << std::endl;
-		std::cout << "get float id:" << json.Key("projects").Key("configs").Key("config", 2).GetValue<float>("id") << std::endl;
+	std::cout << "get int id: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<int>("id") << std::endl;
+	std::cout << "get string id: " << json.Key("projects").Key("configs").Key("config", 1).GetValue<std::string>("id") << std::endl;
+	std::cout << "get float id:" << json.Key("projects").Key("configs").Key("config", 2).GetValue<float>("id") << std::endl;
 
-		std::cout << "get data value index = 0: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 0) << std::endl;
-		std::cout << "get data value index = 1: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 1) << std::endl;
-		std::cout << "get data value index = 2: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 2) << std::endl;
+	std::cout << "get data value index = 0: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 0) << std::endl;
+	std::cout << "get data value index = 1: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 1) << std::endl;
+	std::cout << "get data value index = 2: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 2) << std::endl;
 
-		int size_arr = json.Key("projects").Key("configs").Key("config", 0).GetSizeArray("data");
-		std::cout << "get size array of data: " << size_arr << std::endl;
+	int size_arr = json.Key("projects").Key("configs").Key("config", 0).GetSizeArray("data");
+	std::cout << "get size array of data: " << size_arr << std::endl;
 
-		json.Key("projects").Key("configs").Key("config", 0).ChangeValue("name", "JectJson config");
-		std::cout << "get config name: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("name") << std::endl;
+	json.Key("projects").Key("configs").Key("config", 0).ChangeValue("name", "JectJson config");
+	std::cout << "get config name: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("name") << std::endl;
 
-		std::string data2[] = { "1","2","3" };
-		json.Key("projects").Key("configs").Key("config", 0).ChangeArray("data", data2, 3);
+	std::string data2[] = { "1","2","3" };
+	json.Key("projects").Key("configs").Key("config", 0).ChangeArray("data", data2, 3);
 
-		std::cout << "get data value index = 0: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 0) << std::endl;
-		std::cout << "get data value index = 1: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 1) << std::endl;
-		std::cout << "get data value index = 2: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 2) << std::endl;
+	std::cout << "get data value index = 0: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 0) << std::endl;
+	std::cout << "get data value index = 1: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 1) << std::endl;
+	std::cout << "get data value index = 2: " << json.Key("projects").Key("configs").Key("config", 0).GetValue<std::string>("data", 2) << std::endl;
 
-		json.PrintIt();
+	json.PrintIt();
 
-		json.Save();
+	json.Save();
 
-    return 0;
+	return 0;
 }
 ~~~~~~~~~~
 
