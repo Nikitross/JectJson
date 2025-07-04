@@ -234,13 +234,21 @@ void JsonCpp::RemoveKey(const char *key_val) {
         rapidjson::Value &temp = *this->pEtal;
         rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
 
+        bool exist_key = false;
+
         for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
             if(key_name.compare(current_iterator->name.GetString()) == 0) {
+                exist_key = true;
                 temp.EraseMember(current_iterator->name.GetString());
                 this->pEtal = &this->curr_obj;
                 break;
             }
         }
+
+        if (!exist_key) {
+            this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
+        }
+
     }
 }
 
@@ -348,12 +356,12 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                         this->file_stream.close();
 
                     } else {
-
                         remove(this->json_path);
                         this->file_stream.open(this->json_path, std::ios::out);
                         this->file_stream << "{" << std::endl << std::endl << "}";
                         this->file_stream.close();
                     }
+
                     this->file_stream.open(this->json_path);
                 }
                 break;

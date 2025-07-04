@@ -1,18 +1,24 @@
-include(FetchContent)
 
-FetchContent_Declare(
-    rapidjson
-    GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
-    GIT_TAG master 
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/rapidjson
-)
-
-FetchContent_GetProperties(rapidjson)
+if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/external/rapidjson")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external/rapidjson")
+else()
     
-if(NOT rapidjson_POPULATED)
-    FetchContent_Populate(rapidjson)
-endif()
+    include(FetchContent)
 
+    FetchContent_Declare(
+        rapidjson
+        GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+        GIT_TAG master 
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/rapidjson
+    )
+
+    FetchContent_GetProperties(rapidjson)
+    
+    if(NOT rapidjson_POPULATED)
+        FetchContent_Populate(rapidjson)
+    endif()
+
+endif()
 
 add_library(rapidjson INTERFACE)
 

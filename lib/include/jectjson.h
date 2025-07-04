@@ -659,8 +659,11 @@ TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
         this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
     }
 
+    bool exist_key = false;
+
     for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
         if(key_name.compare(current_iterator->name.GetString()) == 0) {
+            exist_key = true;
             if(current_iterator->value.IsArray()) {
                 if(current_iterator->value[index_value].IsBool()) {
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetBool());
@@ -680,6 +683,10 @@ TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
             }
             break;
         }
+    }
+
+    if (!exist_key) {
+        this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
     }
 
     this->pEtal = &this->curr_obj;
@@ -709,8 +716,11 @@ void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
         this->errorHandler("function ChangeValue: NOT FOUND KEY:", key_name.c_str());
     }
 
+    bool exist_key = false;
+
     for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
         if(key_name.compare(current_iterator->name.GetString()) == 0) {
+            exist_key = true;
             rapidjson::Value &r = temp[current_iterator->name.GetString()];
 
             if(typeid(data) == typeid(std::string)) {
@@ -747,6 +757,10 @@ void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
             this->pEtal = &this->curr_obj;
             break;
         }
+    }
+
+    if (!exist_key) {
+        this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
     }
 }
 

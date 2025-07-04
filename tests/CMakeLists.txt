@@ -11,3 +11,5 @@ target_link_libraries(JectJsonTests
 )
 
 add_test(NAME JectJsonUnitTests COMMAND JectJsonTests)
+
+enable_testing()

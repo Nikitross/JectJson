@@ -15,8 +15,12 @@ add_subdirectory(tests)
 add_subdirectory(external)
 
 
-add_executable(example_json src/main.cpp)
+option(BUILD_EXAMPLES "Build example programs" ON)
 
-target_link_libraries(example_json PRIVATE jectjson)
+if(BUILD_EXAMPLES)
+    add_subdirectory(example)
+endif()
 
-enable_testing()
+
+add_executable(jectjson_main src/main.cpp)
+target_link_libraries(jectjson_main PRIVATE jectjson)
