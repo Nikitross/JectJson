@@ -34,6 +34,7 @@ JsonCpp::JsonCpp() {
     this->pEtal = nullptr;
     this->json_access = FileAccess::R;
     this->userCallbacks.onError = nullptr;
+    this->has_open_json = false;
 }
 
 JsonCpp::~JsonCpp() {
@@ -86,11 +87,18 @@ bool JsonCpp::Save() {
             result = false;
         }
 
+        this->has_open_json = false;
 		return result;
     }
 }
 
 void JsonCpp::PrintIt() {
+
+    if (!this->has_open_json) {
+        this->errorHandler("function Key: JSON is not open!:", "");
+        return;
+    }
+
     char writeBuffer[65536];
     rapidjson::FileWriteStream os(stdout, writeBuffer, sizeof(writeBuffer));
     rapidjson::PrettyWriter<rapidjson::FileWriteStream> writer(os);
@@ -123,7 +131,7 @@ bool JsonCpp::SetSringDataBuffer(const char* DataStrBuff) {
     rapidjson::Document::AllocatorType &a = document.GetAllocator();
     this->etalon_obj.CopyFrom(this->current_object, a);
     this->pEtal = &this->curr_obj;
-
+    this->has_open_json = true;
     return true;
 }
 
@@ -160,6 +168,11 @@ std::string JsonCpp::GetElementType(const rapidjson::Value &val) {
 
 JsonCpp& JsonCpp::Key(const char *key_name) {
 
+    if (!this->has_open_json) {
+        this->errorHandler("function Key: JSON is not open!:", key_name);
+        return *this;
+    }
+
     try {
 
         std::string temp_key_name = key_name;
@@ -194,7 +207,12 @@ JsonCpp& JsonCpp::Key(const char *key_name) {
 }
 
 JsonCpp &JsonCpp::Key(const char *key_name, uint32_t obj_array_index) {
-  
+
+    if (!this->has_open_json) {
+		this->errorHandler("function Key: JSON is not open!:", key_name);
+		return *this;
+	}
+
   try {
         std::string temp_key_name = key_name;
         rapidjson::Value &te = *this->pEtal;
@@ -229,6 +247,12 @@ JsonCpp &JsonCpp::Key(const char *key_name, uint32_t obj_array_index) {
 }
 
 void JsonCpp::RemoveKey(const char *key_val) {
+
+    if (!this->has_open_json) {
+        this->errorHandler("function RemoveKey: JSON is not open!:", key_val);
+        return;
+    }
+
     {
         std::string key_name = key_val;
         rapidjson::Value &temp = *this->pEtal;
@@ -296,6 +320,7 @@ bool JsonCpp::Save(const char* pathFile) {
         }
     }
 
+    this->has_open_json = false;
     return result;
 }
 
@@ -332,6 +357,7 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                 {
                     if(fileExist) {
                         this->file_stream.open(this->json_path, std::ios::in);
+                        this->has_open_json = true;
                     } else {
                         throw "Json File is not found! Path: ";
                     }
@@ -346,6 +372,7 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                     }
 
                     this->file_stream.open(this->json_path, std::ios::in);
+                    this->has_open_json = true;
                 }
                 break;
                 case FileAccess::RWAS:
@@ -363,11 +390,13 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                     }
 
                     this->file_stream.open(this->json_path);
+                    this->has_open_json = true;
                 }
                 break;
                 case FileAccess::VIRTUAL:
                 {
                     this->document.Parse("{}");
+                    this->has_open_json = true;
                 }
                 break;
                 default:
@@ -404,6 +433,7 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
             this->file_mutex.unlock();
             this->errorHandler("Func Open", temp.c_str());
             result = false;
+            this->has_open_json = false;
         }
 
         return result;
@@ -418,6 +448,12 @@ bool JsonCpp::Open(const std::string& json_path, FileAccess jsonAccess) {
 }
 
 uint32_t JsonCpp::GetSizeArray(const char *key_val) {
+
+    if (!this->has_open_json) {
+        this->errorHandler("function GetValue: JSON is not open!:", key_val);
+        return 0;
+    }
+
     {
         uint32_t res = 0;
         std::string key_name = key_val;

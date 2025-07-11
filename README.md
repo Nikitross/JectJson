@@ -1,12 +1,22 @@
-![JectJson logo](doc/logo/jectjson.png)
+﻿![JectJson logo](doc/logo/jectjson_logo_.png)
 
 # JectJson - Modern C++ JSON Facade, or JSON PARSER
 
-JectJson is a lightweight wrapper library built atop RapidJSON, 
-designed to provide Python/JavaScript-like simplicity for JSON handling in C++. 
-It combines RapidJSON's performance with intuitive API design for seamless integration.
+**JectJson is not just another JSON parser. It’s a race car with an automatic transmission and a RapidJSON engine.**  
+If you’re tired of “manual gear shifting” and endlessly digging through documentation — you’re in the right place.
+
 
 Copyright (c) 2024 Nikitross
+
+---
+
+## ⚠️ Important Information
+
+📌 **This library is under development** until the first stable release.  
+API, function names, and signatures may change.  
+Please keep this in mind when integrating it into your projects — or better yet, wait for the release.
+
+---
 
 ## Why JectJson?
 
@@ -15,6 +25,24 @@ Copyright (c) 2024 Nikitross
 - Type-safe by design
 - Predictable error handling
 - Fluent method chaining
+- Hides unnecessary abstractions;
+- Minimizes the interface;
+- Remains flexible and safe;
+- Lets you work with JSON files in a true “open and go” style.
+
+---
+
+## 🧰 Features
+
+### Single Class
+All the necessary functionality is encapsulated in a single class.  
+No need to keep track of multiple helper objects or functions.
+
+### Minimal API
+We removed many standard functions commonly found in JSON parsers, for example:  
+checking the type of the value behind a key.
+
+---
 
 ## Key Features
 
@@ -40,9 +68,11 @@ NOTE: Be sure to merge the latest from "upstream" before making a pull request!
 
 ## Build
 
-mkdir build && cd build
+git clone https://github.com/Nikitross/JectJson.git
+mkdir build
+cd build
 cmake .. 
-make 
+make -j8
 
 ## Example
 

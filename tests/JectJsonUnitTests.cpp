@@ -25,7 +25,7 @@ static bool fileContains(const std::string& filename, const std::string& content
     return fileContent.find(content) != std::string::npos;
 }
 
-TEST(JsonCppTest, BasicTest) {
+TEST(JsonParserTest, BasicTest) {
     JsonCpp json;
     json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
     json.AddObject("root");
@@ -34,7 +34,7 @@ TEST(JsonCppTest, BasicTest) {
     EXPECT_EQ(json.Key("root").GetValue<std::string>("key"), "value");
 }
 
-TEST(JsonCppTest, CreateAndReadBasicJson) {
+TEST(JsonParserTest, CreateAndReadBasicJson) {
     
     JsonCpp json;
     json.RegisterCallback_onError(&ErrHandl);
@@ -56,7 +56,7 @@ TEST(JsonCppTest, CreateAndReadBasicJson) {
     remove(tmpFile.c_str());
 }
 
-TEST(JsonCppTest, NestedObjects) {
+TEST(JsonParserTest, NestedObjects) {
     
     JsonCpp json;
     json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
@@ -81,7 +81,7 @@ TEST(JsonCppTest, NestedObjects) {
     );
 }
 
-TEST(JsonCppTest, ArrayOperations) {
+TEST(JsonParserTest, ArrayOperations) {
     
     JsonCpp json;
     json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
@@ -112,7 +112,7 @@ TEST(JsonCppTest, ArrayOperations) {
 
 }
 
-TEST(JsonCppTest, ErrorHandling) {
+TEST(JsonParserTest, ErrorHandling) {
     JsonCpp json;
 
     bool errorCalled  = false;
@@ -133,7 +133,7 @@ TEST(JsonCppTest, ErrorHandling) {
     EXPECT_TRUE(errorCalled);
 }
 
-TEST(JsonCppTest, StringBufferOperations) {
+TEST(JsonParserTest, StringBufferOperations) {
     
     JsonCpp json;
     json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
@@ -149,7 +149,7 @@ TEST(JsonCppTest, StringBufferOperations) {
     EXPECT_EQ(json2.Key("data").GetValue<std::string>("key"), "value");
 }
 
-TEST(JsonCppTest, DataModification) {
+TEST(JsonParserTest, DataModification) {
     
     JsonCpp json;
     json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
@@ -168,7 +168,7 @@ TEST(JsonCppTest, DataModification) {
     EXPECT_EQ(json.Key("test").GetSizeArray("items"), 3);
 }
 
-TEST(JsonCppTest, FileOperations) {
+TEST(JsonParserTest, FileOperations) {
     
     const std::string testFile = "test_operations.json";
 
@@ -189,7 +189,7 @@ TEST(JsonCppTest, FileOperations) {
     remove(testFile.c_str());
 }
 
-TEST(JsonCppTest, SpecialCases) {
+TEST(JsonParserTest, SpecialCases) {
    
     JsonCpp json;
     json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
@@ -205,7 +205,7 @@ TEST(JsonCppTest, SpecialCases) {
     EXPECT_FALSE(json.Key("root").GetValue<bool>("flag"));
 }
 
-TEST(JsonCppTest, OpenJsonFile) {
+TEST(JsonParserTest, OpenJsonFile) {
 
     remove("unit_test.json");
     JsonCpp json;
@@ -321,7 +321,7 @@ TEST(JsonParserTest, AddObjectAndKeyOperations) {
     EXPECT_TRUE(errorCalled);
 }
 
-TEST(JsonParserTest, ArrayOperations) {
+TEST(JsonParserTest, ArrayOperations1) {
    
     JsonCpp json;
     const std::string TEST_FILE = "test_file.json";
@@ -387,7 +387,7 @@ TEST(JsonParserTest, ModifyOperations) {
     EXPECT_TRUE(errorCalled);
 }
 
-TEST(JsonParserTest, StringBufferOperations) {
+TEST(JsonParserTest, StringBufferOperations1) {
 
     JsonCpp json;
     ASSERT_TRUE(json.Open("", JsonCpp::FileAccess::VIRTUAL));
@@ -406,7 +406,7 @@ TEST(JsonParserTest, StringBufferOperations) {
     EXPECT_EQ(json2.Key("root").GetValue<std::string>("test"), "value");
 }
 
-TEST(JsonParserTest, ErrorHandling) {
+TEST(JsonParserTest, ErrorHandling1) {
     
     JsonCpp json;
     const std::string TEST_FILE = "test_file.json";
@@ -448,7 +448,49 @@ TEST(JsonParserTest, RWASModeRecreatesFile) {
     EXPECT_NE(content.find("new"), std::string::npos);
 }
 
+TEST(JsonParserTest, UseNotInitObject) {
 
+    JsonCpp json;
+
+    std::string lastError;
+    bool hasError = false;
+    json.RegisterCallback_onError([&](const char* msg, const char* details) {
+        lastError = std::string(msg) + " " + std::string(details);
+        hasError = true;
+    });
+
+    json.AddObject("root");
+    EXPECT_TRUE(hasError);
+
+    hasError = false;
+    json.Key("root").AddValue("key", "value");
+    EXPECT_TRUE(hasError);
+
+    hasError = false;
+    std::string val = json.Key("root").GetValue<std::string>("key");
+    EXPECT_TRUE(hasError);
+
+}
+
+TEST(JsonParserTest, FailInitTypeGetValue) {
+    
+    JsonCpp json;
+    std::string lastError;
+    bool hasError = false;
+    
+    json.RegisterCallback_onError([&](const char* msg, const char* details) {
+        lastError = std::string(msg) + " " + std::string(details);
+        std::cout << lastError << std::endl;
+        hasError = true;
+    });
+
+    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+    json.AddObject("root");
+    json.Key("root").AddValue("key", "value");
+
+    int val = json.Key("root").GetValue<int>("key");
+    EXPECT_TRUE(hasError);
+}
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

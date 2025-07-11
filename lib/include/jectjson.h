@@ -271,11 +271,22 @@ private:
     rapidjson::Value *pEtal;
     userCallbacksInfo userCallbacks;
 
+    bool has_open_json;
+
 	std::string GetArray(const char* key_val);
     void RemoveKey(const char* key_val, uint32_t size_data);
+    
     void errorHandler(const char* message, const char* details);
 	void errorHandler(const std::string& modul_name,const std::string& message,const std::string& details);
     bool IsValidJson(const std::string& json_file);
+    
+    template<typename InputType, typename OutpuType>
+    constexpr inline void getTypeError() {
+        if (!::std::is_same<InputType, OutpuType>::value) {
+            this->errorHandler("ERROR, USER TYPE IS NOT REAL TYPE OF VALUE!", " RETURN DEFAULT VALUE");
+        }
+    }
+    
 };
 
 /*-- Exported variables -----------------------------------------------------*/
@@ -603,6 +614,11 @@ T JsonCpp::setT(float, double) {
 template <typename TypeOutData>
 TypeOutData JsonCpp::GetValue(const char* key_val) {
 
+    if (!this->has_open_json) {
+        this->errorHandler("function GetValue: JSON is not open!:", key_val); 
+        return TypeOutData();
+    }
+
     std::string key_name = key_val;
     TypeOutData out = TypeOutData();
     TypeOutData out_type = TypeOutData();
@@ -616,14 +632,19 @@ TypeOutData JsonCpp::GetValue(const char* key_val) {
     for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
         if(key_name.compare(current_iterator->name.GetString()) == 0) {
             if(current_iterator->value.IsBool()) {
+                getTypeError<TypeOutData, bool>();
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetBool());
             } else if(current_iterator->value.IsInt()) {
+                getTypeError<TypeOutData, int>();
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetInt());
             } else if(current_iterator->value.IsFloat()) {
+                getTypeError<TypeOutData, float>();
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetFloat());
             } else if(current_iterator->value.IsString()) {
+                getTypeError<TypeOutData, std::string>();
                 out = getT<TypeOutData>(out_type, static_cast<std::string>(current_iterator->value.GetString()));
             } else if(current_iterator->value.IsDouble()) {
+                getTypeError<TypeOutData, double>();
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetDouble());
             } else {
                 return TypeOutData();
@@ -649,6 +670,11 @@ TypeOutData JsonCpp::GetValue(const char* key_val) {
 template <typename TypeOutData>
 TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
 
+    if (!this->has_open_json) {
+        this->errorHandler("function GetValue: JSON is not open!:", key_val);
+        return TypeOutData();
+    }
+
     std::string key_name = key_val;
     TypeOutData out = TypeOutData();
     TypeOutData out_type = TypeOutData();
@@ -666,14 +692,19 @@ TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
             exist_key = true;
             if(current_iterator->value.IsArray()) {
                 if(current_iterator->value[index_value].IsBool()) {
+                    getTypeError<TypeOutData, bool>();
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetBool());
                 } else if(current_iterator->value[index_value].IsInt()) {
+                    getTypeError<TypeOutData, int>();
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetInt());
                 } else if(current_iterator->value[index_value].IsFloat()) {
+                    getTypeError<TypeOutData, float>();
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetFloat());
                 } else if(current_iterator->value[index_value].IsString()) {
+                    getTypeError<TypeOutData, std::string>();
                     out = getT<TypeOutData>(out_type, static_cast<std::string>(current_iterator->value[index_value].GetString()));
                 } else if(current_iterator->value[index_value].IsDouble()) {
+                    getTypeError<TypeOutData, double>();
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetDouble());
                 } else {
                     return TypeOutData();
@@ -706,6 +737,11 @@ TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
  *****************************************************************************/
 template <typename TypeData>
 void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
+
+    if (!this->has_open_json) {
+        this->errorHandler("function ChangeValue: JSON is not open!:", key_val);
+        return;
+    }
 
     std::string key_name = key_val;
     rapidjson::Value &temp = *this->pEtal;
@@ -779,6 +815,11 @@ void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
 template <typename TypeData>
 void JsonCpp::ChangeArray(const char* key_val, TypeData* type_data, uint32_t size_array) {
 
+    if (!this->has_open_json) {
+        this->errorHandler("function ChangeArray: JSON is not open!:", "");
+        return;
+    }
+
     rapidjson::Value &temp = *this->pEtal;
     this->RemoveKey(key_val);
     this->pEtal = &temp;
@@ -799,6 +840,12 @@ void JsonCpp::ChangeArray(const char* key_val, TypeData* type_data, uint32_t siz
  *****************************************************************************/
 template <typename TypeValue0, typename TypeValue1>
 void JsonCpp::AddValue(TypeValue0 &key_num0, TypeValue1 key_num1) {
+
+    if (!this->has_open_json) {
+        this->errorHandler("function GetValue: JSON is not open!:", "");
+        return;
+    }
+
     try {
         std::string temp_key_name = key_num0;
         rapidjson::Value &temp = *this->pEtal;
@@ -864,6 +911,12 @@ void JsonCpp::AddValue(TypeValue0 &key_num0, TypeValue1 key_num1) {
  *****************************************************************************/
 template <typename T0, typename T1>
 void JsonCpp::AddArray(T0 &key_name, T1 array_value, int sizeArray) {
+    
+    if (!this->has_open_json) {
+        this->errorHandler("function AddArray: JSON is not open!:", " ");
+        return;
+    }
+    
     try {
 
         std::string temp_key_name = key_name;
@@ -936,6 +989,12 @@ void JsonCpp::AddArray(T0 &key_name, T1 array_value, int sizeArray) {
  *****************************************************************************/
 template<typename T0>
 void JsonCpp::AddObjectsArray(T0 &key_name, int sizeArray) {
+   
+    if (!this->has_open_json) {
+        this->errorHandler("function AddObjectsArray: JSON is not open!:", ""); 
+        return;
+    }
+    
     try {
         if(sizeArray > 0) {
             std::string temp_key_name = key_name;
@@ -985,6 +1044,12 @@ void JsonCpp::AddObjectsArray(T0 &key_name, int sizeArray) {
  *****************************************************************************/
 template <typename T>
 void JsonCpp::AddObject(T &key_name) {
+    
+    if (!this->has_open_json) {
+        this->errorHandler("function AddObject: JSON is not open!:", "");
+        return;
+    }
+    
     try {
 
         std::string temp_key_name = key_name;
