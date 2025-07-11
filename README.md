@@ -1,4 +1,4 @@
-﻿![JectJson logo](doc/logo/jectjson_logo_.png)
+﻿![JectJson logo](doc/logo/jectjson_logo.png)
 
 # JectJson - Modern C++ JSON Facade, or JSON PARSER
 
