@@ -25,6 +25,23 @@
 /*-- Local Macro Definitions ------------------------------------------------*/
 /*-- Local Typedefs ---------------------------------------------------------*/
 /*-- Local Variables --------------------------------------------------------*/
+
+static const char* ErrorCodeStr[] = {
+    "None",
+    "InvalidJsonFile",
+    "FileNotFound",
+    "SavePathIsEmpty",
+    "ObjectIsEmpty",
+    "KeyNotFound",
+    "KeyNotObject",
+    "KeyNotArray",
+    "KeyTypeMismatch",
+    "SaveError",
+    "AccessError",
+    "RapidJsonError",
+    "GeneralError"
+};
+
 /*-- Local function prototypes ----------------------------------------------*/
 /*-- Local functions --------------------------------------------------------*/
 /*-- Class function ---------------------------------------------------------*/
@@ -34,7 +51,8 @@ JsonCpp::JsonCpp() {
     this->pEtal = nullptr;
     this->json_access = FileAccess::R;
     this->userCallbacks.onError = nullptr;
-    this->has_open_json = false;
+    this->object_is_empty_ = true;
+    this->error_code_ = ErrorCode::None;
 }
 
 JsonCpp::~JsonCpp() {
@@ -47,11 +65,41 @@ void JsonCpp::Update() {
 
 bool JsonCpp::Save() {
 
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
+        return false;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return false;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return false;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return false;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     {
         bool result = false;
 
         if((this->json_path == nullptr) || (strlen(this->json_path) == 0)) {
-			this->errorHandler("function save", "not set save path");
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER 
+        this->errorHandler(__FUNCTION__, "", ErrorCode::SavePathIsEmpty);
+#else
+		this->errorHandler(ErrorCode::SavePathIsEmpty);
+#endif	
             return result;
 		}
 
@@ -83,21 +131,46 @@ bool JsonCpp::Save() {
         } catch(...) {
 
 			this->file_mutex.unlock();
-            this->errorHandler("ERROR", "Save file");
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+			this->errorHandler(__FUNCTION__, "", ErrorCode::SaveError);
+#else
+			this->errorHandler(ErrorCode::SaveError);
+#endif
             result = false;
         }
 
-        this->has_open_json = false;
 		return result;
     }
 }
 
 void JsonCpp::PrintIt() {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function Key: JSON is not open!:", "");
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
     char writeBuffer[65536];
     rapidjson::FileWriteStream os(stdout, writeBuffer, sizeof(writeBuffer));
@@ -107,11 +180,64 @@ void JsonCpp::PrintIt() {
 }
 
 uint32_t JsonCpp::GetChildObjectCount() {
+
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
+        return false;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return false;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return false;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return false;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     this->pEtal = &this->curr_obj;
     return (*this->pEtal).MemberCount();
 }
 
 std::string JsonCpp::GetStringDataBuffer() {
+
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
+        return "";
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return "";
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return "";
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return "";
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
     rapidjson::StringBuffer buffer;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> wr(buffer);
@@ -131,11 +257,11 @@ bool JsonCpp::SetSringDataBuffer(const char* DataStrBuff) {
     rapidjson::Document::AllocatorType &a = document.GetAllocator();
     this->etalon_obj.CopyFrom(this->current_object, a);
     this->pEtal = &this->curr_obj;
-    this->has_open_json = true;
+    this->object_is_empty_ = false;
     return true;
 }
 
-std::string JsonCpp::GetArray(const char* key_val) {
+std::string JsonCpp::GetArray(const char* key_name) {
     return std::string();
 }
 
@@ -166,21 +292,71 @@ std::string JsonCpp::GetElementType(const rapidjson::Value &val) {
     return "Unknown";
 }
 
-JsonCpp& JsonCpp::Key(const char *key_name) {
+JsonCpp& JsonCpp::Key(const char* key_name) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function Key: JSON is not open!:", key_name);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return *this;
     }
 
+    if (this->error_code_ != ErrorCode::None) {
+        return *this;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return *this;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return *this;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     try {
 
-        std::string temp_key_name = key_name;
+        std::string key_name_str = key_name;
         rapidjson::Value &te = *this->pEtal;
         rapidjson::Value::ConstMemberIterator Iter = te.MemberBegin();
 
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+        if (Iter == te.MemberEnd()) {
+            std::string msg = std::string(" key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+			return *this;
+        }
+
+        auto it = te.FindMember(key_name_str.c_str());
+        if (it == te.MemberEnd()) {
+            std::string msg = std::string(" key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+			return *this;
+        }
+
+#else
+
+        if (Iter == te.MemberEnd()) {
+            this->errorHandler(ErrorCode::KeyNotFound);
+			return *this;
+        }
+
+        auto it = te.FindMember(key_name_str.c_str());
+        if (it == te.MemberEnd()) {
+            this->errorHandler(ErrorCode::KeyNotFound);
+			return *this;
+        }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
         for(; Iter != te.MemberEnd(); ++Iter) {
-            if(temp_key_name.compare(Iter->name.GetString()) == 0) {
+            if(key_name_str.compare(Iter->name.GetString()) == 0) {
                 if(Iter->value.IsObject()) {
                     this->pEtal = &te[Iter->name.GetString()];
                     return *this;
@@ -190,36 +366,65 @@ JsonCpp& JsonCpp::Key(const char *key_name) {
                         this->pEtal = &te[Iter->name.GetString()][0];
                         return *this;
                     }
-                    throw "KEY-ARR - IS NOT OBJECT";
+                    throw ErrorCode::KeyNotObject;
                 }
-                throw "KEY-ARR - IS NOT ARRAY()";
+                throw ErrorCode::KeyNotArray;
             }          
         }
 
-        throw "KEY-ARR - NOT FOUND KEY: ";
+    } catch(ErrorCode code) {
+        std::string temp = std::to_string(static_cast<int>(code));
+        temp += " Key: ";
+        temp += std::string(key_name);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        {
+            this->errorHandler(__FUNCTION__, temp.c_str(), code);
+		}
+#else
 
-    } catch(const char *message) {
-        std::string temp = message;
-        temp += key_name;
-		this->errorHandler("function key", temp.c_str());
-        return *this;
+        this->errorHandler(code);
+
+#endif
+    
     }
+
+    return *this;
 }
 
 JsonCpp &JsonCpp::Key(const char *key_name, uint32_t obj_array_index) {
 
-    if (!this->has_open_json) {
-		this->errorHandler("function Key: JSON is not open!:", key_name);
-		return *this;
-	}
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
+        return *this;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return *this;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return *this;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return *this;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
   try {
-        std::string temp_key_name = key_name;
+        std::string key_name_str = key_name;
         rapidjson::Value &te = *this->pEtal;
         rapidjson::Value::ConstMemberIterator Iter = te.MemberBegin();
 
         for(; Iter != te.MemberEnd(); ++Iter) {
-            if(temp_key_name.compare(Iter->name.GetString()) == 0) {
+            if(key_name_str.compare(Iter->name.GetString()) == 0) {
                 if(Iter->value.IsObject()) {
                     this->pEtal = &te[Iter->name.GetString()];
                     return *this;
@@ -229,65 +434,144 @@ JsonCpp &JsonCpp::Key(const char *key_name, uint32_t obj_array_index) {
                         this->pEtal = &te[Iter->name.GetString()][obj_array_index];
                         return *this;
                     }
-                    throw "KEY-ARR - IS NOT OBJECT";
+                    throw ErrorCode::KeyNotObject;
                 }
-                throw "KEY-ARR - IS NOT ARRAY()";
+                throw ErrorCode::KeyNotArray;
             }
         }
 
-        throw "KEY-ARR - NOT FOUND KEY: ";
-
-    } catch(const char *message) {
-        std::string temp = message;
+    } catch(ErrorCode code) {
+        std::string temp = std::to_string(static_cast<int>(code));
+        temp += " Key: ";
         temp += key_name;
-        this->errorHandler("function key", temp.c_str());
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        {
+            this->errorHandler(__FUNCTION__, temp.c_str(), code);
+		}
+#else
+		this->errorHandler(ErrorCode::GeneralError);
+#endif
+ 
     }
 
     return *this;
 }
 
-void JsonCpp::RemoveKey(const char *key_val) {
+void JsonCpp::RemoveKey(const char *key_name) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function RemoveKey: JSON is not open!:", key_val);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
 
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     {
-        std::string key_name = key_val;
+        std::string key_name_str = key_name;
         rapidjson::Value &temp = *this->pEtal;
         rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
 
-        bool exist_key = false;
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+        if (current_iterator == temp.MemberEnd()) {
+            std::string msg = std::string(" key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+            return;
+        }
+
+        auto it = temp.FindMember(key_name_str.c_str());
+        if (it == temp.MemberEnd()) {
+            std::string msg = std::string(" key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+            return;
+        }
+
+#else
+
+        if (current_iterator == temp.MemberEnd()) {
+            this->errorHandler(ErrorCode::KeyNotFound);
+            return;
+        }
+
+        auto it = temp.FindMember(key_name_str.c_str());
+        if (it == temp.MemberEnd()) {
+            this->errorHandler(ErrorCode::KeyNotFound);
+            return;
+        }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
         for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-            if(key_name.compare(current_iterator->name.GetString()) == 0) {
-                exist_key = true;
+            if(key_name_str.compare(current_iterator->name.GetString()) == 0) {
                 temp.EraseMember(current_iterator->name.GetString());
                 this->pEtal = &this->curr_obj;
                 break;
             }
         }
-
-        if (!exist_key) {
-            this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
-        }
-
     }
 }
 
-void JsonCpp::RemoveKey(const char *key_val, uint32_t size_data) {
-
+void JsonCpp::RemoveKey(const char *key_name, uint32_t size_data) {
+       
 }
 
 bool JsonCpp::Save(const char* pathFile) {
 
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
+        return false;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return false;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return false;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return false;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->json_path == nullptr) {
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+		this->errorHandler(__FUNCTION__, pathFile, ErrorCode::SaveError);
+#else
+		this->errorHandler(ErrorCode::SaveError);
+#endif
+        return false;
+    }
+
     bool result = false;
 
     {
-        if(this->json_path == nullptr) {
-            return result;
-		}
 
         try {
 
@@ -315,12 +599,15 @@ bool JsonCpp::Save(const char* pathFile) {
         } catch(...) {
 
             this->file_mutex.unlock();
-            this->errorHandler("ERROR", "save file");
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER 
+			this->errorHandler(__FUNCTION__, pathFile, ErrorCode::SaveError);
+#else
+			this->errorHandler(ErrorCode::SaveError);
+#endif
             result = false;
         }
     }
 
-    this->has_open_json = false;
     return result;
 }
 
@@ -338,9 +625,24 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
             fileExist = true;
 
             if (!this->IsValidJson(json_path)) {
-                return false;
                 this->file_mutex.unlock();
+                return false;
+                
             }
+        }
+
+        if (!fileExist) {
+            if(jsonAccess == FileAccess::R || jsonAccess == FileAccess::RW) {
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER	
+                this->errorHandler(__FUNCTION__, json_path, ErrorCode::FileNotFound);
+#else
+				this->errorHandler(ErrorCode::FileNotFound);
+#endif
+
+                this->file_mutex.unlock();
+                return false;
+			}
         }
 
         bool result = false;
@@ -357,7 +659,7 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                 {
                     if(fileExist) {
                         this->file_stream.open(this->json_path, std::ios::in);
-                        this->has_open_json = true;
+                        this->object_is_empty_ = false;
                     } else {
                         throw "Json File is not found! Path: ";
                     }
@@ -372,7 +674,7 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                     }
 
                     this->file_stream.open(this->json_path, std::ios::in);
-                    this->has_open_json = true;
+                    this->object_is_empty_ = false;
                 }
                 break;
                 case FileAccess::RWAS:
@@ -390,13 +692,13 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                     }
 
                     this->file_stream.open(this->json_path);
-                    this->has_open_json = true;
+                    this->object_is_empty_ = false;
                 }
                 break;
                 case FileAccess::VIRTUAL:
                 {
                     this->document.Parse("{}");
-                    this->has_open_json = true;
+                    this->object_is_empty_ = false;
                 }
                 break;
                 default:
@@ -431,9 +733,14 @@ bool JsonCpp::Open(const char *json_path, FileAccess jsonAccess) {
                 delete istream_wraper;
             }
             this->file_mutex.unlock();
-            this->errorHandler("Func Open", temp.c_str());
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+			this->errorHandler(__FUNCTION__, temp.c_str(), ErrorCode::GeneralError);
+#else
+			this->errorHandler(ErrorCode::GeneralError);
+#endif
             result = false;
-            this->has_open_json = false;
+            this->object_is_empty_ = true;
         }
 
         return result;
@@ -447,21 +754,41 @@ bool JsonCpp::Open(const std::string& json_path, FileAccess jsonAccess) {
     return this->Open(this->json_path, jsonAccess);
 }
 
-uint32_t JsonCpp::GetSizeArray(const char *key_val) {
+uint32_t JsonCpp::GetSizeArray(const char *key_name) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function GetValue: JSON is not open!:", key_val);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return 0;
     }
 
+    if (this->error_code_ != ErrorCode::None) {
+        return 0;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return 0;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return 0;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     {
         uint32_t res = 0;
-        std::string key_name = key_val;
+        std::string key_name_str = key_name;
         rapidjson::Value &temp = *this->pEtal;
         rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
 
         for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-            if(key_name.compare(current_iterator->name.GetString()) == 0) {
+            if(key_name_str.compare(current_iterator->name.GetString()) == 0) {
                 if(current_iterator->value.IsArray()) {
                     res = temp[current_iterator->name.GetString()].Size();
                 } else {
@@ -476,7 +803,7 @@ uint32_t JsonCpp::GetSizeArray(const char *key_val) {
     }
 }
 
-bool JsonCpp::RegisterCallback_onError(const ErrorCallback& callbackFunc) {
+bool JsonCpp::SetErrorCallback(const ErrorCallback& callbackFunc) {
     if(callbackFunc) {
         this->userCallbacks.onError = callbackFunc;
 		return true;
@@ -484,50 +811,104 @@ bool JsonCpp::RegisterCallback_onError(const ErrorCallback& callbackFunc) {
     return false;
 }
 
-bool JsonCpp::RegisterCallback_onError(const ErrorCallback2& callbackFunc) {
-    if(callbackFunc) {
-        this->userCallbacks.onError2 = callbackFunc;
-        return true;
-    }
-    return false;
-}
-
-void JsonCpp::errorHandler(const char *message, const char *details) {
-    if(this->userCallbacks.onError) {
-        this->userCallbacks.onError(message, details);
-	} if(this->userCallbacks.onError2) {
-        this->userCallbacks.onError2("JSONCPP ",message,details);
-    }
-}
-
-void JsonCpp::errorHandler(const std::string& modul_name,const std::string& message,const std::string& details) {
-	if(this->userCallbacks.onError2) {
-        this->userCallbacks.onError2(modul_name,message,details);
-	} else if(this->userCallbacks.onError) {
-        this->userCallbacks.onError(message.c_str(), details.c_str());
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+void JsonCpp::errorHandler(const std::string& func_name, const std::string& message, const ErrorCode error) {
+    
+    if(this->error_code_ == ErrorCode::None) {
+        this->error_code_ = error;
 	}
+
+    if (this->userCallbacks.onError) {
+        this->userCallbacks.onError(func_name, message, error);
+    }
 }
+#else
+void JsonCpp::errorHandler(const ErrorCode error) {
+
+    if (this->error_code_ == ErrorCode::None) {
+        this->error_code_ = error;
+    }
+
+    if (this->userCallbacks.onError) {
+        this->userCallbacks.onError(error);
+    }
+}
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
 bool JsonCpp::IsValidJson(const std::string& json_file) {
 
     std::ifstream file(json_file);
+
     if (!file) {
-        this->errorHandler("IsValidJson", " ", "Cannot open file: " + json_file);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        {
+            std::string msg = "Cannot open file: " + json_file;
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::FileNotFound);
+        }
+
+#else
+		this->errorHandler(ErrorCode::FileNotFound);
+#endif
     }
     
     std::ostringstream ss;
     ss << file.rdbuf();
     std::string js_file = ss.str();
+    file.close();
 
     rapidjson::Document doc;
     doc.Parse(js_file.c_str());
 
     if (doc.HasParseError()) {
         int error_temp = doc.GetParseError();
-        this->errorHandler("JSON parse error, invalid json file", std::to_string(error_temp).c_str());
+        //this->errorHandler("JSON parse error, invalid json file", std::to_string(error_temp).c_str());
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        std::string msg = "JSON parse error, invalid json file: " + std::string(json_file) + std::to_string(error_temp);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::InvalidJsonFile);
+#else
+		this->errorHandler(ErrorCode::InvalidJsonFile);
+#endif
         return false;
     }
     return true;
+}
+
+bool JsonCpp::HasErrorCode() const {
+    if (this->error_code_ != ErrorCode::None) {
+        return true;
+   }
+    return false;
+}
+
+int JsonCpp::GetErrorCode() {
+    return static_cast<int>(this->error_code_);
+}
+
+std::string JsonCpp::GetErrorCodeStr(ErrorCode error) {
+    size_t idx = static_cast<size_t>(error);
+    if (idx < sizeof(ErrorCodeStr) / sizeof(ErrorCodeStr[0])) {
+        return std::string(ErrorCodeStr[idx]);
+    }
+    return std::move(std::string("UnknownErrorCode!"));
+}
+
+bool JsonCpp::ObjectIsEmpty() const {
+    return this->object_is_empty_;
+}
+
+void JsonCpp::ClearErrorState() {
+    this->error_code_ = ErrorCode::None;
+}
+
+void JsonCpp::ClearObject() {
+
+    this->json_path = nullptr;
+    this->json_file_path = "";
+    this->pEtal = nullptr;
+    this->json_access = FileAccess::R;
+    this->object_is_empty_ = true;
+    this->error_code_ = ErrorCode::None;
 }
 
 /*-- Exported functions -----------------------------------------------------*/

@@ -28,6 +28,9 @@
 /*-- Hardware specific libraries --------------------------------------------*/
 /*-- Project specific includes ----------------------------------------------*/
 /*-- Exported macro ---------------------------------------------------------*/
+
+#define ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
 /*-- Typedefs ---------------------------------------------------------------*/
 /*-- Exported classes -------------------------------------------------------*/
 
@@ -194,15 +197,33 @@ private:
     template <typename T>
     T setT(float, const char*);
 
-    typedef std::function<void(const char* message, const char* details)> ErrorCallback;
-	typedef std::function<void(const std::string& modul_name,const std::string& message,const std::string& details)> ErrorCallback2;
-    
+public:
+
+    enum class ErrorCode {
+         None = 0,
+         InvalidJsonFile,
+         FileNotFound,
+         SavePathIsEmpty,
+         ObjectIsEmpty,
+         KeyNotFound,
+         KeyNotObject,
+         KeyNotArray,
+         KeyTypeMismatch,
+         SaveError,
+         AccessError,
+         RapidJsonError,
+         GeneralError,
+    };
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+    typedef std::function<void(const std::string& func_name, const std::string& message, const ErrorCode error)> ErrorCallback;
+#else
+	typedef std::function<void(const ErrorCode error)> ErrorCallback;
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
 	typedef struct {
         ErrorCallback onError;
-		ErrorCallback2 onError2;
     } userCallbacksInfo;
-
-public:
 
     enum class FileAccess {
         R,
@@ -226,7 +247,7 @@ public:
     JsonCpp &Key(const char* key_name, uint32_t obj_array_index);
 
     uint32_t GetChildObjectCount();
-    uint32_t GetSizeArray(const char* key_val);
+    uint32_t GetSizeArray(const char* key_name);
 
     std::string GetElementType(const rapidjson::Value& val);
 
@@ -234,28 +255,35 @@ public:
     std::string GetStringDataBuffer();
 
     void PrintIt();
-    void RemoveKey(const char* key_val);
-    bool RegisterCallback_onError(const ErrorCallback& callbackFunc);
-	bool RegisterCallback_onError(const ErrorCallback2& callbackFunc);
+    void RemoveKey(const char* key_name);
+    bool SetErrorCallback(const ErrorCallback& callbackFunc);
 
     template <typename TypeOutData>
-    TypeOutData GetValue(const char* key_val);
+    TypeOutData GetValue(const char* key_name);
     template <typename TypeOutData>
-    TypeOutData GetValue(const char* key_val, uint32_t index_value);
+    TypeOutData GetValue(const char* key_name, uint32_t index_value);
 
     template <typename TypeData>
-    void ChangeValue(const char* key_val, TypeData data);
+    void ChangeValue(const char* key_name, TypeData data);
     template <typename TypeData>
-    void ChangeArray(const char* key_val, TypeData* type_data, uint32_t size_array);
+    void ChangeArray(const char* key_name, TypeData* type_data, uint32_t size_array);
 
     template <typename TypeValue0, typename TypeValue1>
-    void AddValue(TypeValue0 &key_num0, TypeValue1 key_num1);
+    void AddValue(TypeValue0 &key_name, TypeValue1 key_num1);
     template <typename T0, typename T1>
     void AddArray(T0 &key_name, T1 array_value, int sizeArray);
     template<typename T0>
     void AddObjectsArray(T0 &key_name, int sizeArray);
     template <typename T>
     void AddObject(T &key_name);
+
+    void ClearObject();
+
+    bool HasErrorCode() const;
+    int GetErrorCode();
+    void ClearErrorState();
+    std::string GetErrorCodeStr(ErrorCode error);
+	bool ObjectIsEmpty() const;
 
 private:
     
@@ -271,19 +299,31 @@ private:
     rapidjson::Value *pEtal;
     userCallbacksInfo userCallbacks;
 
-    bool has_open_json;
+    bool object_is_empty_;
+    ErrorCode error_code_;
 
-	std::string GetArray(const char* key_val);
-    void RemoveKey(const char* key_val, uint32_t size_data);
-    
-    void errorHandler(const char* message, const char* details);
-	void errorHandler(const std::string& modul_name,const std::string& message,const std::string& details);
+	std::string GetArray(const char* key_name);
+    void RemoveKey(const char* key_name, uint32_t size_data);
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+    void errorHandler(const std::string& func_name, const std::string& message, const ErrorCode error);
+#else
+	void errorHandler(const ErrorCode error);
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     bool IsValidJson(const std::string& json_file);
     
     template<typename InputType, typename OutpuType>
-    constexpr inline void getTypeError() {
+    constexpr inline void getTypeError(const std::string& key_name) {
         if (!::std::is_same<InputType, OutpuType>::value) {
-            this->errorHandler("ERROR, USER TYPE IS NOT REAL TYPE OF VALUE!", " RETURN DEFAULT VALUE");
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+            std::string msg = std::string("key - ") + key_name + " type is not match";
+			this->errorHandler("GetValue: ", msg, ErrorCode::KeyTypeMismatch);
+#else
+			this->errorHandler(ErrorCode::KeyTypeMismatch);
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
         }
     }
     
@@ -612,41 +652,96 @@ T JsonCpp::setT(float, double) {
  *  @return value
  *****************************************************************************/
 template <typename TypeOutData>
-TypeOutData JsonCpp::GetValue(const char* key_val) {
+TypeOutData JsonCpp::GetValue(const char* key_name) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function GetValue: JSON is not open!:", key_val); 
-        return TypeOutData();
-    }
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        
+        if (this->object_is_empty_) {
+            std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
+            return TypeOutData();
+        }
 
-    std::string key_name = key_val;
+        if(this->error_code_ != ErrorCode::None) {
+            return TypeOutData();
+		}
+
+#else
+        if (this->object_is_empty_) {
+		    this->errorHandler(ErrorCode::ObjectIsEmpty);
+            return TypeOutData();
+        }
+
+        if (this->error_code_ != ErrorCode::None) {
+            return TypeOutData();
+        }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    std::string key_name_str = key_name;
     TypeOutData out = TypeOutData();
     TypeOutData out_type = TypeOutData();
     rapidjson::Value &temp = *this->pEtal;
     rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
 
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        
     if (current_iterator == temp.MemberEnd()) {
-        this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
+        std::string msg = std::string(" key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+        return TypeOutData();
     }
 
+    {
+        auto it = temp.FindMember(key_name_str.c_str());
+        if (it == temp.MemberEnd()) {
+            std::string msg = std::string(" key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+            return TypeOutData();
+        }
+    }
+
+#else
+
+    if (current_iterator == temp.MemberEnd()) {
+	 this->errorHandler(ErrorCode::KeyNotFound);
+        return TypeOutData();
+    }
+
+    auto it = temp.FindMember(key_name_str.c_str());
+    if (it == temp.MemberEnd()) {
+        this->errorHandler(ErrorCode::KeyNotFound);
+        return TypeOutData();
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-        if(key_name.compare(current_iterator->name.GetString()) == 0) {
+        if(key_name_str.compare(current_iterator->name.GetString()) == 0) {
             if(current_iterator->value.IsBool()) {
-                getTypeError<TypeOutData, bool>();
+                getTypeError<TypeOutData, bool>(key_name_str);
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetBool());
             } else if(current_iterator->value.IsInt()) {
-                getTypeError<TypeOutData, int>();
+                getTypeError<TypeOutData, int>(key_name_str);
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetInt());
             } else if(current_iterator->value.IsFloat()) {
-                getTypeError<TypeOutData, float>();
+                getTypeError<TypeOutData, float>(key_name_str);
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetFloat());
             } else if(current_iterator->value.IsString()) {
-                getTypeError<TypeOutData, std::string>();
+                getTypeError<TypeOutData, std::string>(key_name_str);
                 out = getT<TypeOutData>(out_type, static_cast<std::string>(current_iterator->value.GetString()));
             } else if(current_iterator->value.IsDouble()) {
-                getTypeError<TypeOutData, double>();
+                getTypeError<TypeOutData, double>(key_name_str);
                 out = getT<TypeOutData>(out_type, current_iterator->value.GetDouble());
             } else {
+
+                // TODO refactoring.
+                if (!current_iterator->value.IsObject()) {
+                    this->errorHandler(__func__, " Key not Object! ", ErrorCode::KeyNotObject);
+                    return TypeOutData();
+                }
+
                 return TypeOutData();
             }
             break;
@@ -668,56 +763,96 @@ TypeOutData JsonCpp::GetValue(const char* key_val) {
  *  @return value
  *****************************************************************************/
 template <typename TypeOutData>
-TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
+TypeOutData JsonCpp::GetValue(const char* key_name, uint32_t index_value) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function GetValue: JSON is not open!:", key_val);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return TypeOutData();
     }
 
-    std::string key_name = key_val;
+    if (this->error_code_ != ErrorCode::None) {
+        return TypeOutData();
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return TypeOutData();
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return TypeOutData();
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    std::string key_name_str = key_name;
     TypeOutData out = TypeOutData();
     TypeOutData out_type = TypeOutData();
     rapidjson::Value &temp = *this->pEtal;
     rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
 
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     if (current_iterator == temp.MemberEnd()) {
-        this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
+        std::string msg = std::string(" key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+        return TypeOutData();
     }
 
-    bool exist_key = false;
+    auto it = temp.FindMember(key_name_str.c_str());
+    if (it == temp.MemberEnd()) {
+        std::string msg = std::string(" key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+        return TypeOutData();
+    }
+
+#else
+
+    if (current_iterator == temp.MemberEnd()) {
+        this->errorHandler(ErrorCode::KeyNotFound);
+        return TypeOutData();
+    }
+
+    auto it = temp.FindMember(key_name_str.c_str());
+    if (it == temp.MemberEnd()) {
+        this->errorHandler(ErrorCode::KeyNotFound);
+        return TypeOutData();
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
     for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-        if(key_name.compare(current_iterator->name.GetString()) == 0) {
-            exist_key = true;
+        if(key_name_str.compare(current_iterator->name.GetString()) == 0) {
             if(current_iterator->value.IsArray()) {
                 if(current_iterator->value[index_value].IsBool()) {
-                    getTypeError<TypeOutData, bool>();
+                    getTypeError<TypeOutData, bool>(key_name_str);
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetBool());
                 } else if(current_iterator->value[index_value].IsInt()) {
-                    getTypeError<TypeOutData, int>();
+                    getTypeError<TypeOutData, int>(key_name_str);
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetInt());
                 } else if(current_iterator->value[index_value].IsFloat()) {
-                    getTypeError<TypeOutData, float>();
+                    getTypeError<TypeOutData, float>(key_name_str);
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetFloat());
                 } else if(current_iterator->value[index_value].IsString()) {
-                    getTypeError<TypeOutData, std::string>();
+                    getTypeError<TypeOutData, std::string>(key_name_str);
                     out = getT<TypeOutData>(out_type, static_cast<std::string>(current_iterator->value[index_value].GetString()));
                 } else if(current_iterator->value[index_value].IsDouble()) {
-                    getTypeError<TypeOutData, double>();
+                    getTypeError<TypeOutData, double>(key_name_str);
                     out = getT<TypeOutData>(out_type, current_iterator->value[index_value].GetDouble());
                 } else {
                     return TypeOutData();
                 }
             } else {
+                this->errorHandler(__func__, " Key not Array", ErrorCode::KeyNotArray);
                 out = TypeOutData();
             }
             break;
         }
-    }
-
-    if (!exist_key) {
-        this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
     }
 
     this->pEtal = &this->curr_obj;
@@ -736,27 +871,71 @@ TypeOutData JsonCpp::GetValue(const char* key_val, uint32_t index_value) {
  *  @return None
  *****************************************************************************/
 template <typename TypeData>
-void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
+void JsonCpp::ChangeValue(const char* key_name, TypeData data) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function ChangeValue: JSON is not open!:", key_val);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
 
-    std::string key_name = key_val;
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    std::string key_name_str = key_name;
     rapidjson::Value &temp = *this->pEtal;
     rapidjson::Document::AllocatorType &alloc = this->document.GetAllocator();
     rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
 
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     if (current_iterator == temp.MemberEnd()) {
-        this->errorHandler("function ChangeValue: NOT FOUND KEY:", key_name.c_str());
+        std::string msg = std::string(" key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+        return;
     }
 
-    bool exist_key = false;
+    auto it = temp.FindMember(key_name_str.c_str());
+    if (it == temp.MemberEnd()) {
+        std::string msg = std::string(" key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::KeyNotFound);
+        return;
+    }
+
+#else
+
+    if (current_iterator == temp.MemberEnd()) {
+        this->errorHandler(ErrorCode::KeyNotFound);
+        return;
+    }
+
+    auto it = temp.FindMember(key_name_str.c_str());
+    if (it == temp.MemberEnd()) {
+        this->errorHandler(ErrorCode::KeyNotFound);
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
 
     for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-        if(key_name.compare(current_iterator->name.GetString()) == 0) {
-            exist_key = true;
+        if(key_name_str.compare(current_iterator->name.GetString()) == 0) {
+            
             rapidjson::Value &r = temp[current_iterator->name.GetString()];
 
             if(typeid(data) == typeid(std::string)) {
@@ -794,10 +973,6 @@ void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
             break;
         }
     }
-
-    if (!exist_key) {
-        this->errorHandler("function GetValue: NOT FOUND KEY:", key_name.c_str());
-    }
 }
 
 /******************************************************************************
@@ -813,17 +988,37 @@ void JsonCpp::ChangeValue(const char* key_val, TypeData data) {
  *  @retval None
  *****************************************************************************/
 template <typename TypeData>
-void JsonCpp::ChangeArray(const char* key_val, TypeData* type_data, uint32_t size_array) {
+void JsonCpp::ChangeArray(const char* key_name, TypeData* type_data, uint32_t size_array) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function ChangeArray: JSON is not open!:", "");
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
 
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     rapidjson::Value &temp = *this->pEtal;
-    this->RemoveKey(key_val);
+    this->RemoveKey(key_name);
     this->pEtal = &temp;
-    this->AddArray(key_val, type_data, size_array);
+    this->AddArray(key_name, type_data, size_array);
     this->pEtal = &this->current_object;
 }
 
@@ -839,58 +1034,86 @@ void JsonCpp::ChangeArray(const char* key_val, TypeData* type_data, uint32_t siz
  *  @return None
  *****************************************************************************/
 template <typename TypeValue0, typename TypeValue1>
-void JsonCpp::AddValue(TypeValue0 &key_num0, TypeValue1 key_num1) {
+void JsonCpp::AddValue(TypeValue0 &key_name, TypeValue1 key_num1) {
 
-    if (!this->has_open_json) {
-        this->errorHandler("function GetValue: JSON is not open!:", "");
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
 
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     try {
-        std::string temp_key_name = key_num0;
+
+        std::string key_name_str = key_name;
         rapidjson::Value &temp = *this->pEtal;
         rapidjson::Document::AllocatorType &alloc = this->document.GetAllocator();
         rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
         rapidjson::Value str;
-        str.SetString(temp_key_name.c_str(), (rapidjson::SizeType)temp_key_name.length(), alloc);
-        bool keyAlreadyExist = false;
+        str.SetString(key_name_str.c_str(), (rapidjson::SizeType)key_name_str.length(), alloc);
+        
+        rapidjson::Value val;
 
-        for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-            if(temp_key_name.compare(current_iterator->name.GetString()) == 0) {
-                keyAlreadyExist = true;
-            }
+        if (typeid(key_num1) == typeid(const char*)) {
+            val.SetString(rapidjson::StringRef(setT<char>("char", key_num1)));
+            temp.AddMember(str, val, alloc);
+        }
+        else if (typeid(key_num1) == typeid(std::string)) {
+            val.SetString(setT<std::string>(std::string(), key_num1).c_str(), static_cast<int>(setT<std::string>(std::string(), key_num1).length()), alloc);
+            temp.AddMember(str, val, alloc);
+        }
+        else if (typeid(key_num1) == typeid(int)) {
+            val.SetInt(setT<int>(int(), key_num1));
+            temp.AddMember(str, val, alloc);
+        }
+        else if (typeid(key_num1) == typeid(double)) {
+            val.SetDouble(setT<double>(double(), key_num1));
+            temp.AddMember(str, val, alloc);
+        }
+        else if (typeid(key_num1) == typeid(float)) {
+            val.SetFloat(setT<float>(float(), key_num1));
+            temp.AddMember(str, val, alloc);
+        }
+        else if (typeid(key_num1) == typeid(bool)) {
+            val.SetBool(setT<bool>(bool(), key_num1));
+            temp.AddMember(str, val, alloc);
         }
 
-        if(!keyAlreadyExist) {
-            rapidjson::Value val;
-
-            if(typeid(key_num1) == typeid(const char*)) {
-                val.SetString(rapidjson::StringRef(setT<char>("char", key_num1)));
-                temp.AddMember(str, val, alloc);
-            } else if(typeid(key_num1) == typeid(std::string)) {
-                val.SetString(setT<std::string>(std::string(), key_num1).c_str(), static_cast<int>(setT<std::string>(std::string(), key_num1).length()), alloc);
-                temp.AddMember(str, val, alloc);
-            } else if(typeid(key_num1) == typeid(int)) {
-                val.SetInt(setT<int>(int(), key_num1));
-                temp.AddMember(str, val, alloc);
-            } else if(typeid(key_num1) == typeid(double)) {
-                val.SetDouble(setT<double>(double(), key_num1));
-                temp.AddMember(str, val, alloc);
-            } else if(typeid(key_num1) == typeid(float)) {
-                val.SetFloat(setT<float>(float(), key_num1));
-                temp.AddMember(str, val, alloc);
-            } else if(typeid(key_num1) == typeid(bool)) {
-                val.SetBool(setT<bool>(bool(), key_num1));
-                temp.AddMember(str, val, alloc);
-            }
-
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            temp.Accept(writer);
-        }
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        temp.Accept(writer);
 
     } catch(const char *message) {
-        this->errorHandler("Func AddValue", message);
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+        std::string msg = std::string(message) + std::string("key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::GeneralError);
+
+#else
+
+		this->errorHandler(ErrorCode::GeneralError);
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     }
 
     this->pEtal = &this->curr_obj;
@@ -912,66 +1135,90 @@ void JsonCpp::AddValue(TypeValue0 &key_num0, TypeValue1 key_num1) {
 template <typename T0, typename T1>
 void JsonCpp::AddArray(T0 &key_name, T1 array_value, int sizeArray) {
     
-    if (!this->has_open_json) {
-        this->errorHandler("function AddArray: JSON is not open!:", " ");
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
     
     try {
 
-        std::string temp_key_name = key_name;
+        std::string key_name_str = key_name;
         rapidjson::Value &temp = *this->pEtal;
         rapidjson::Document::AllocatorType &alloc = this->document.GetAllocator();
         rapidjson::Value arr(rapidjson::kArrayType);
         rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
-        bool keyAlreadyExist = false;
 
-        for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-            if(temp_key_name.compare(current_iterator->name.GetString()) == 0) {
-                keyAlreadyExist = true;
+        if (typeid(array_value) == typeid(std::string*)) {
+            rapidjson::Value strVal;
+            std::string st;
+            for (int i = 0; i < sizeArray; i++) {
+                st = setT<std::string>(std::string(), array_value[i]);
+                strVal.SetString(st.c_str(), (rapidjson::SizeType)st.length(), alloc);
+                arr.PushBack(strVal, alloc);
             }
         }
-
-        if(!keyAlreadyExist) {
-            if(typeid(array_value) == typeid(std::string*)) {
-                rapidjson::Value strVal;
-                std::string st;
-                for(int i = 0; i < sizeArray; i++) {
-                    st = setT<std::string>(std::string(), array_value[i]);
-                    strVal.SetString(st.c_str(), (rapidjson::SizeType)st.length(), alloc);
-                    arr.PushBack(strVal, alloc);
-                }
-
-            } else if(typeid(array_value) == typeid(int*) || typeid(array_value) == typeid(uint8_t*) || typeid(array_value) == typeid(uint32_t*)) {
-                for(int i = 0; i < sizeArray; i++) {
-                    arr.PushBack(setT<int>(int(), array_value[i]), alloc);
-                }
-            } else if(typeid(array_value) == typeid(float*)) {
-                for(int i = 0; i < sizeArray; i++) {
-                    arr.PushBack(setT<float>(float(), array_value[i]), alloc);
-                }
-            } else if(typeid(array_value) == typeid(double*)) {
-                for(int i = 0; i < sizeArray; i++) {
-                    arr.PushBack(setT<double>(double(), array_value[i]), alloc);
-                }
-            } else if(typeid(array_value) == typeid(bool*)) {
-                for(int i = 0; i < sizeArray; i++) {
-                    arr.PushBack(setT<bool>(bool(), array_value[i]), alloc);
-                }
-            } else {
-                throw "type input";
+        else if (typeid(array_value) == typeid(int*) || typeid(array_value) == typeid(uint8_t*) || typeid(array_value) == typeid(uint32_t*)) {
+            for (int i = 0; i < sizeArray; i++) {
+                arr.PushBack(setT<int>(int(), array_value[i]), alloc);
             }
-
-            rapidjson::Value str;
-            str.SetString(temp_key_name.c_str(), (rapidjson::SizeType)temp_key_name.length(), alloc);
-            temp.AddMember(str, arr, alloc);
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            temp.Accept(writer);
         }
+        else if (typeid(array_value) == typeid(float*)) {
+            for (int i = 0; i < sizeArray; i++) {
+                arr.PushBack(setT<float>(float(), array_value[i]), alloc);
+            }
+        }
+        else if (typeid(array_value) == typeid(double*)) {
+            for (int i = 0; i < sizeArray; i++) {
+                arr.PushBack(setT<double>(double(), array_value[i]), alloc);
+            }
+        }
+        else if (typeid(array_value) == typeid(bool*)) {
+            for (int i = 0; i < sizeArray; i++) {
+                arr.PushBack(setT<bool>(bool(), array_value[i]), alloc);
+            }
+        }
+        else {
+            throw "Input type.";
+        }
+
+        rapidjson::Value str;
+        str.SetString(key_name_str.c_str(), (rapidjson::SizeType)key_name_str.length(), alloc);
+        temp.AddMember(str, arr, alloc);
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        temp.Accept(writer);
 
     } catch(const char *message) {
-        this->errorHandler("Func AddArray", message);
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        {
+            std::string msg = std::string(message) + std::string("key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::GeneralError);
+		}
+#else
+		this->errorHandler(ErrorCode::GeneralError);
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
     }
 
     this->pEtal = &this->curr_obj;
@@ -990,44 +1237,66 @@ void JsonCpp::AddArray(T0 &key_name, T1 array_value, int sizeArray) {
 template<typename T0>
 void JsonCpp::AddObjectsArray(T0 &key_name, int sizeArray) {
    
-    if (!this->has_open_json) {
-        this->errorHandler("function AddObjectsArray: JSON is not open!:", ""); 
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
     
     try {
+
         if(sizeArray > 0) {
-            std::string temp_key_name = key_name;
+            std::string key_name_str = key_name;
             rapidjson::Value& temp = *this->pEtal;
             rapidjson::Document::AllocatorType& alloc = this->document.GetAllocator();
             rapidjson::Value arr(rapidjson::kArrayType);
             rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
-            bool keyAlreadyExist = false;
 
-            for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-                if(temp_key_name.compare(current_iterator->name.GetString()) == 0) {
-                    keyAlreadyExist = true;
-                }
+            for (int i = 0; i < sizeArray; i++) {
+                rapidjson::Value newObject(rapidjson::kObjectType);
+                arr.PushBack(newObject, alloc);
             }
-
-            if(!keyAlreadyExist) {
-                for(int i = 0; i < sizeArray; i++) {
-                    rapidjson::Value newObject(rapidjson::kObjectType);
-                    arr.PushBack(newObject, alloc);
-                }
-                rapidjson::Value str;
-                str.SetString(temp_key_name.c_str(), (rapidjson::SizeType)temp_key_name.length(), alloc);
-                temp.AddMember(str, arr, alloc);
-                rapidjson::StringBuffer buffer;
-                rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-                temp.Accept(writer);
-            }
+            
+            rapidjson::Value str;
+            str.SetString(key_name_str.c_str(), (rapidjson::SizeType)key_name_str.length(), alloc);
+            temp.AddMember(str, arr, alloc);
+            rapidjson::StringBuffer buffer;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+            temp.Accept(writer);
 
         } else {
             throw ("Array size mest be > 1");
         }
     } catch(const char* message) {
-        this->errorHandler("Func AddObjectsArray", message);
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+        {
+            std::string msg = std::string(message) + std::string("key - ") + std::string(key_name);
+            this->errorHandler(__FUNCTION__, msg, ErrorCode::GeneralError);
+        }
+#else
+		this->errorHandler(ErrorCode::GeneralError);
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+    
     }
 
     this->pEtal = &this->curr_obj;
@@ -1045,39 +1314,61 @@ void JsonCpp::AddObjectsArray(T0 &key_name, int sizeArray) {
 template <typename T>
 void JsonCpp::AddObject(T &key_name) {
     
-    if (!this->has_open_json) {
-        this->errorHandler("function AddObject: JSON is not open!:", "");
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    if (this->object_is_empty_) {
+        std::string msg = std::string(" key - ") + std::string(key_name) + std::string(" Json object is empty!");
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::ObjectIsEmpty);
         return;
     }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#else
+
+    if (this->object_is_empty_) {
+        this->errorHandler(ErrorCode::ObjectIsEmpty);
+        return;
+    }
+
+    if (this->error_code_ != ErrorCode::None) {
+        return;
+    }
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
     
     try {
 
-        std::string temp_key_name = key_name;
+        std::string key_name_str = key_name;
         rapidjson::Value& temp = *this->pEtal;
         rapidjson::Document::AllocatorType& alloc = this->document.GetAllocator();
         rapidjson::Value::ConstMemberIterator current_iterator = temp.MemberBegin();
-        bool keyAlreadyExist = false;
 
-        for(; current_iterator != temp.MemberEnd(); ++current_iterator) {
-            if(temp_key_name.compare(current_iterator->name.GetString()) == 0) {
-                keyAlreadyExist = true;
-            }
-        }
-
-        if(!keyAlreadyExist) {
-            rapidjson::Value anonym(rapidjson::kObjectType);
-            rapidjson::Value str;
-            str.SetString(temp_key_name.c_str(), (rapidjson::SizeType)temp_key_name.length(), alloc);
-            temp.AddMember(str, anonym, alloc);
-        }
+        rapidjson::Value anonym(rapidjson::kObjectType);
+        rapidjson::Value str;
+        str.SetString(key_name_str.c_str(), (rapidjson::SizeType)key_name_str.length(), alloc);
+        temp.AddMember(str, anonym, alloc);
 
     } catch(const char* message) {
-        this->errorHandler("Func AddObject", message);
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER 
+
+        std::string msg = std::string(message) + std::string("key - ") + std::string(key_name);
+        this->errorHandler(__FUNCTION__, msg, ErrorCode::RapidJsonError);
+
+#else
+		this->errorHandler(ErrorCode::RapidJsonError);
+
+#endif // ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+       
     }
 
     this->pEtal = &this->curr_obj;
 }
 
 /*-- Exported functions -----------------------------------------------------*/
+
 #endif // JECTJSON_H
 /*-- EOF --------------------------------------------------------------------*/

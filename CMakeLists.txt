@@ -23,4 +23,5 @@ endif()
 
 
 add_executable(jectjson_main src/main.cpp)
-target_link_libraries(jectjson_main PRIVATE jectjson)
+#target_link_libraries(jectjson_main PRIVATE jectjson)
+

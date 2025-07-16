@@ -1,13 +1,11 @@
 
 #include <gtest/gtest.h>
 #include <jectjson.h>
-
+#include <string>
 #include <filesystem>
 #include <fstream>
 
-static void ErrHandl(const std::string& modul_name, const std::string& message, const std::string& details) {
-    std::cout << modul_name << message << " " << details << std::endl;
-}
+static const std::string test_file_path = "json_test.json";
 
 static bool fileExists(const std::string& filename) {
     struct stat buffer;
@@ -25,21 +23,54 @@ static bool fileContains(const std::string& filename, const std::string& content
     return fileContent.find(content) != std::string::npos;
 }
 
-TEST(JsonParserTest, BasicTest) {
+using namespace testing;
+
+class JsonCppErrorControlTest : public ::testing::Test {
+protected:
     JsonCpp json;
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+
+    void SetUp() override {
+        json.ClearErrorState();
+    }
+};
+
+
+TEST(JsonParserTest, BasicTest) {
+   
+    JsonCpp json;
+	
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
     json.AddObject("root");
     json.Key("root").AddValue("key", "value");
 
     EXPECT_EQ(json.Key("root").GetValue<std::string>("key"), "value");
+	remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, CreateAndReadBasicJson) {
     
     JsonCpp json;
-    json.RegisterCallback_onError(&ErrHandl);
 
-    ASSERT_TRUE(json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL));
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+    
+    auto localErrorHandler = [](const std::string& func_name, const std::string& message, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << message << " Error code: " << static_cast<int>(error) << std::endl;
+    };
+#else
+    auto localErrorHandler = [](const JsonCpp::ErrorCode error) {
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+	};
+
+#endif
+
+    json.SetErrorCallback(localErrorHandler);
+    
+    ASSERT_FALSE(json.Open(test_file_path, JsonCpp::FileAccess::R));
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::FileNotFound));
+    json.ClearErrorState();
+
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL));
+
     json.AddObject("root");
     json.Key("root").AddValue("name", "Test");
     json.Key("root").AddValue("value", 42);
@@ -47,19 +78,20 @@ TEST(JsonParserTest, CreateAndReadBasicJson) {
     EXPECT_EQ(json.Key("root").GetValue<std::string>("name"), "Test");
     EXPECT_EQ(json.Key("root").GetValue<int>("value"), 42);
 
-    const std::string tmpFile = "test_temp.json";
-    ASSERT_TRUE(json.Save(tmpFile.c_str()));
+    const std::string temp_file_path = "json_temp_test.json";
+    ASSERT_TRUE(json.Save(temp_file_path.c_str()));
 
     JsonCpp jsonLoad;
-    ASSERT_TRUE(jsonLoad.Open(tmpFile, JsonCpp::FileAccess::RW));
+    ASSERT_TRUE(jsonLoad.Open(temp_file_path, JsonCpp::FileAccess::RW));
     EXPECT_EQ(jsonLoad.Key("root").GetValue<std::string>("name"), "Test");
-    remove(tmpFile.c_str());
+    remove(temp_file_path.c_str());
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, NestedObjects) {
     
     JsonCpp json;
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
 
     json.AddObject("school");
     json.Key("school").AddObject("classA");
@@ -84,7 +116,8 @@ TEST(JsonParserTest, NestedObjects) {
 TEST(JsonParserTest, ArrayOperations) {
     
     JsonCpp json;
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
 
     int numbers[] = { 1, 2, 3 };
     json.AddObject("data");
@@ -109,24 +142,39 @@ TEST(JsonParserTest, ArrayOperations) {
     json.Key("data").ChangeArray("numbers", newNumbers, 2);
     
     EXPECT_EQ(json.Key("data").GetSizeArray("numbers"), 2);
-
 }
 
 TEST(JsonParserTest, ErrorHandling) {
+    
     JsonCpp json;
 
-    bool errorCalled  = false;
-    auto errorHandler = [&errorCalled](const std::string&, const std::string&, const std::string&) {
+    bool errorCalled = false;
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
         errorCalled = true;
     };
 
-    json.RegisterCallback_onError(errorHandler);
+#else
 
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+
+    json.SetErrorCallback(localErrorHandler);
+
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
     json.AddObject("test");
 
     json.Key("test").GetValue<int>("invalid_key");
     EXPECT_TRUE(errorCalled);
+	json.ClearErrorState();
 
     errorCalled = false;
     EXPECT_FALSE(json.Open("nonexistent.json", JsonCpp::FileAccess::RW));
@@ -136,7 +184,8 @@ TEST(JsonParserTest, ErrorHandling) {
 TEST(JsonParserTest, StringBufferOperations) {
     
     JsonCpp json;
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
 
     json.AddObject("data");
     json.Key("data").AddValue("key", "value");
@@ -152,7 +201,8 @@ TEST(JsonParserTest, StringBufferOperations) {
 TEST(JsonParserTest, DataModification) {
     
     JsonCpp json;
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+	
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
 
     json.AddObject("test");
     json.Key("test").AddValue("value", 100);
@@ -169,12 +219,10 @@ TEST(JsonParserTest, DataModification) {
 }
 
 TEST(JsonParserTest, FileOperations) {
-    
-    const std::string testFile = "test_operations.json";
 
     {
         JsonCpp json;
-        json.Open(testFile, JsonCpp::FileAccess::RWA);
+        json.Open(test_file_path, JsonCpp::FileAccess::RWA);
         json.AddObject("data");
         json.Key("data").AddValue("created", true);
         ASSERT_TRUE(json.Save());
@@ -182,17 +230,18 @@ TEST(JsonParserTest, FileOperations) {
 
     {
         JsonCpp json;
-        ASSERT_TRUE(json.Open(testFile, JsonCpp::FileAccess::RW));
+        ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RW));
         EXPECT_TRUE(json.Key("data").GetValue<bool>("created"));
     }
 
-    remove(testFile.c_str());
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, SpecialCases) {
    
     JsonCpp json;
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
     EXPECT_NO_THROW(json.PrintIt());
 
     json.AddObject("root");
@@ -203,86 +252,131 @@ TEST(JsonParserTest, SpecialCases) {
 
     json.Key("root").AddValue("flag", false);
     EXPECT_FALSE(json.Key("root").GetValue<bool>("flag"));
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, OpenJsonFile) {
 
-    remove("unit_test.json");
+   
     JsonCpp json;
 
-    bool res = json.Open("unit_test.json", JsonCpp::FileAccess::R);
-    ASSERT_FALSE(res);
+    ASSERT_FALSE(json.Open(test_file_path, JsonCpp::FileAccess::R));
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::FileNotFound));
+    json.ClearErrorState();
 
-    res = json.Open("unit_test.json", JsonCpp::FileAccess::RW);
-    ASSERT_FALSE(res);
+    ASSERT_FALSE(json.Open(test_file_path, JsonCpp::FileAccess::RW));
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::FileNotFound));
+	json.ClearErrorState();
 
-    res = json.Open("unit_test.json", JsonCpp::FileAccess::RWA);
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWA));
+    EXPECT_EQ(json.ObjectIsEmpty(), false);
+
     json.AddObject("data");
     json.Key("data").AddValue("created", true);
     ASSERT_TRUE(json.Save());
-    ASSERT_TRUE(res);
+ 
+	ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::R)); // TODO Check if this file olready opened.
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RW));
+    json.ClearObject();
 
-    res = json.Open("unit_test.json", JsonCpp::FileAccess::R);
-    ASSERT_TRUE(res);
+    remove(test_file_path.c_str());
 
-    res = json.Open("unit_test.json", JsonCpp::FileAccess::RW);
-    ASSERT_TRUE(res);
-
-    remove("unit_test.json");
-    res = json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+	ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL)); // TODO Check save wen file olready exists.
     ASSERT_TRUE(json.Save());
-    ASSERT_TRUE(res);
-
-    remove("unit_test.json");
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, OpenWithReadAccessOnExistingFile) {
-
-    const std::string TEST_FILE = "test_file.json";
-    std::ofstream out(TEST_FILE);
-    out << "{\"key\":\"value\"}";
-    out.close();
+    
+    {
+        std::ofstream out(test_file_path);
+        out << "{\"key\":\"value\"}";
+        out.close();
+    }
 
     JsonCpp json;
-    json.RegisterCallback_onError([](const char* msg, const char* details) {
-        FAIL() << "Error callback should not be called";
-    });
 
-    EXPECT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::R));
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
+        FAIL() << "Error callback should not be called";
+    };
+
+#else
+
+    auto localErrorHandler = [](const JsonCpp::ErrorCode error) {
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+        FAIL() << "Error callback should not be called";
+    };
+
+#endif
+
+    json.SetErrorCallback(localErrorHandler);
+
+    EXPECT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::R));
+	remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, OpenWithReadAccessOnNonExistingFile) {
    
     JsonCpp json;
-    bool callbackCalled = false;
 
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
-        callbackCalled = true;
-    });
+    bool errorCalled = false;
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#else
+
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+	json.SetErrorCallback(localErrorHandler);
 
     EXPECT_FALSE(json.Open("nonexistent.json", JsonCpp::FileAccess::R));
-    EXPECT_TRUE(callbackCalled);
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::FileNotFound));
+    EXPECT_TRUE(errorCalled);
 }
 
 TEST(JsonParserTest, OpenWithRWAAccessCreatesNewFile) {
    
     JsonCpp json;
-    const std::string TEST_FILE = "test_file.json";
-    json.RegisterCallback_onError([](const char* msg, const char* details) {
-        FAIL() << "Error callback should not be called";
-    });
 
-    EXPECT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::RWA));
-    EXPECT_TRUE(fileExists(TEST_FILE));
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
+        FAIL() << "Error callback should not be called";
+    };
+
+#else
+
+    auto localErrorHandler = [](const JsonCpp::ErrorCode error) {
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+        FAIL() << "Error callback should not be called";
+    };
+
+#endif
+
+    json.SetErrorCallback(localErrorHandler);
+
+    EXPECT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWA));
+    EXPECT_TRUE(fileExists(test_file_path));
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, VirtualFileOperations) {
 
     JsonCpp json;
-    const std::string TEMP_FILE = "temp_file.json";
-    json.RegisterCallback_onError([](const char* msg, const char* details) {
-        FAIL() << "Error callback should not be called";
-    });
 
     EXPECT_TRUE(json.Open("", JsonCpp::FileAccess::VIRTUAL));
 
@@ -291,15 +385,16 @@ TEST(JsonParserTest, VirtualFileOperations) {
 
     EXPECT_EQ(json.Key("root").GetValue<int>("test"), 123);
 
-    EXPECT_TRUE(json.Save(TEMP_FILE.c_str()));
-    EXPECT_TRUE(fileContains(TEMP_FILE, "test"));
+    EXPECT_TRUE(json.Save(test_file_path.c_str()));
+    EXPECT_TRUE(fileContains(test_file_path, "test"));
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, AddObjectAndKeyOperations) {
 
     JsonCpp json;
-    const std::string TEST_FILE = "test_file.json";
-    ASSERT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::RWA));
+
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWA));
 
     json.AddObject("root");
     json.Key("root").AddObject("nested");
@@ -313,19 +408,37 @@ TEST(JsonParserTest, AddObjectAndKeyOperations) {
     EXPECT_EQ(json.Key("root").Key("nested").GetValue<bool>("bool_val"), true);
 
     bool errorCalled = false;
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
         errorCalled = true;
-    });
+    };
+
+#else
+
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+
+    json.SetErrorCallback(localErrorHandler);
 
     json.Key("root").Key("nonexistent");
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
     EXPECT_TRUE(errorCalled);
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, ArrayOperations1) {
    
     JsonCpp json;
-    const std::string TEST_FILE = "test_file.json";
-    ASSERT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::RWA));
+ 
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWA));
 
     json.AddObject("root");
     json.Key("root").AddObject("arrays");
@@ -349,42 +462,85 @@ TEST(JsonParserTest, ArrayOperations1) {
     EXPECT_FALSE(json.Key("root").Key("arrays").GetValue<bool>("bool_array", 1));
 
     bool errorCalled = false;
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
         errorCalled = true;
-    });
+    };
+
+#else
+
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+    json.SetErrorCallback(localErrorHandler);
 
     json.Key("root").Key("arrays").GetValue<int>("nonexistent_array", 0);
     EXPECT_TRUE(errorCalled);
+	EXPECT_TRUE(json.HasErrorCode());
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, ModifyOperations) {
     
     JsonCpp json;
-    const std::string TEST_FILE = "test_file.json";
-    ASSERT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::RWA));
+
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWA));
 
     json.AddObject("root");
     json.Key("root").AddValue("value", "old");
     json.Key("root").AddArray("array", std::vector<int>{1, 2, 3}.data(), 3);
 
+	EXPECT_EQ(json.Key("root").GetValue<std::string>("value"), "old");
+
     json.Key("root").ChangeValue("value", "new");
+
     EXPECT_EQ(json.Key("root").GetValue<std::string>("value"), "new");
 
     int newArr[] = { 4, 5, 6 };
+    
     json.Key("root").ChangeArray("array", newArr, 3);
+    
     EXPECT_EQ(json.Key("root").GetValue<int>("array", 0), 4);
 
     bool errorCalled = false;
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
         errorCalled = true;
-    });
+    };
+
+#else
+
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+    json.SetErrorCallback(localErrorHandler);
 
     json.Key("root").ChangeValue("nonexistent", 123);
+	EXPECT_TRUE(json.HasErrorCode());
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
     EXPECT_TRUE(errorCalled);
-
+    json.ClearErrorState();
     errorCalled = false;
+
     json.Key("root").ChangeArray("nonexistent", newArr, 3);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
     EXPECT_TRUE(errorCalled);
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, StringBufferOperations1) {
@@ -396,6 +552,7 @@ TEST(JsonParserTest, StringBufferOperations1) {
     json.Key("root").AddValue("test", "value");
 
     std::string jsonStr = json.GetStringDataBuffer();
+
     EXPECT_NE(jsonStr.find("test"), std::string::npos);
     EXPECT_NE(jsonStr.find("value"), std::string::npos);
 
@@ -409,88 +566,295 @@ TEST(JsonParserTest, StringBufferOperations1) {
 TEST(JsonParserTest, ErrorHandling1) {
     
     JsonCpp json;
-    const std::string TEST_FILE = "test_file.json";
-    std::string lastError;
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
-        lastError = std::string(msg) + " " + std::string(details);
-    });
+ 
+    bool errorCalled = false;
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
+        errorCalled = true;
+    };
+
+#else
+
+    auto localErrorHandler = [&](const JsonCpp::ErrorCode error) {
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+		errorCalled = true;
+    };
+
+#endif
+
+    json.SetErrorCallback(localErrorHandler);
 
     json.Open("nonexistent.json", JsonCpp::FileAccess::R);
-    EXPECT_NE(lastError.find("nonexistent.json"), std::string::npos);
 
-    lastError.clear();
-    ASSERT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::RWA));
+    ASSERT_TRUE(errorCalled);
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::FileNotFound));
+    
+    json.ClearErrorState();
+	errorCalled = false;
+    
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWA));
+
     json.Key("nonexistent_key");
-    EXPECT_NE(lastError.find("nonexistent_key"), std::string::npos);
+
+	EXPECT_TRUE(json.HasErrorCode());
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
+	ASSERT_TRUE(errorCalled);
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, RWASModeRecreatesFile) {
 
-    const std::string TEST_FILE = "test_file.json";
-
     {
-        std::ofstream out(TEST_FILE);
+        std::ofstream out(test_file_path);
         out << "{\"old\":\"data\"}";
         out.close();
     }
 
     JsonCpp json;
-    ASSERT_TRUE(json.Open(TEST_FILE, JsonCpp::FileAccess::RWAS));
+    ASSERT_TRUE(json.Open(test_file_path, JsonCpp::FileAccess::RWAS));
 
     json.AddObject("root");
     json.Key("root").AddValue("new", "data");
     json.Save();
 
-    std::ifstream in(TEST_FILE);
+    std::ifstream in(test_file_path);
     std::string content((std::istreambuf_iterator<char>(in)),std::istreambuf_iterator<char>());
     
     EXPECT_EQ(content.find("old"), std::string::npos);
     EXPECT_NE(content.find("new"), std::string::npos);
+    remove(test_file_path.c_str());
 }
 
 TEST(JsonParserTest, UseNotInitObject) {
 
     JsonCpp json;
 
-    std::string lastError;
-    bool hasError = false;
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
-        lastError = std::string(msg) + " " + std::string(details);
-        hasError = true;
-    });
+    bool errorCalled = false;
+
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
+        errorCalled = true;
+    };
+
+#else
+
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+
+    json.SetErrorCallback(localErrorHandler);
 
     json.AddObject("root");
-    EXPECT_TRUE(hasError);
 
-    hasError = false;
+    EXPECT_TRUE(errorCalled);
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    json.ClearErrorState();
+
+    errorCalled = false;
     json.Key("root").AddValue("key", "value");
-    EXPECT_TRUE(hasError);
+    EXPECT_TRUE(errorCalled);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    json.ClearErrorState();
 
-    hasError = false;
+    errorCalled = false;
     std::string val = json.Key("root").GetValue<std::string>("key");
-    EXPECT_TRUE(hasError);
-
+    EXPECT_TRUE(errorCalled);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
 }
 
 TEST(JsonParserTest, FailInitTypeGetValue) {
     
     JsonCpp json;
-    std::string lastError;
-    bool hasError = false;
-    
-    json.RegisterCallback_onError([&](const char* msg, const char* details) {
-        lastError = std::string(msg) + " " + std::string(details);
-        std::cout << lastError << std::endl;
-        hasError = true;
-    });
+	
+    bool errorCalled = false;
 
-    json.Open("unit_test.json", JsonCpp::FileAccess::VIRTUAL);
+#ifdef ENABLE_JSONCPP_DETAILS_ERROR_HANDLER
+
+    auto localErrorHandler = [&errorCalled](const std::string& func_name, const std::string& msg, const JsonCpp::ErrorCode error) {
+        std::cout << func_name << " " << msg << " Error code: " << static_cast<int>(error) << std::endl;
+        errorCalled = true;
+    };
+
+#else
+
+    auto localErrorHandler = [&errorCalled](const JsonCpp::ErrorCode error) {
+        errorCalled = true;
+        std::cout << "Error code: " << static_cast<int>(error) << std::endl;
+    };
+
+#endif
+
+
+    json.SetErrorCallback(localErrorHandler);
+
+    json.Open(test_file_path, JsonCpp::FileAccess::VIRTUAL);
     json.AddObject("root");
     json.Key("root").AddValue("key", "value");
 
     int val = json.Key("root").GetValue<int>("key");
-    EXPECT_TRUE(hasError);
+
+    EXPECT_TRUE(errorCalled);
+    EXPECT_TRUE(json.HasErrorCode());
+	EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyTypeMismatch));
+	remove(test_file_path.c_str());
 }
+
+TEST_F(JsonCppErrorControlTest, AllErrorCodesAndNoOverwrite) {
+
+	// ErrorCode::None
+    EXPECT_FALSE(json.HasErrorCode());
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::None));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::None), "None");
+
+    //ErrorCode::InvalidJsonFile
+    {
+        std::ofstream f("invalid.json");
+        f << "{ invalid json }";
+        f.close();
+    }
+
+    json.Open("invalid.json", JsonCpp::FileAccess::R);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::InvalidJsonFile));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::InvalidJsonFile), "InvalidJsonFile");
+    json.ClearObject();
+    remove("invalid.json");
+
+    // FileNotFound
+    json.Open("definitely_not_exist_file.json", JsonCpp::FileAccess::R);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::FileNotFound));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::FileNotFound), "FileNotFound");
+    json.ClearObject();
+
+    // SavePathIsEmpty
+
+    json.Open("", JsonCpp::FileAccess::VIRTUAL);
+    json.AddObject("level1");
+    json.Key("level1").AddObject("level2");
+    json.Key("level1").Key("level2").AddValue("key", "value");
+    json.Save();
+
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::SavePathIsEmpty));
+    json.ClearErrorState();
+    json.Save(test_file_path.c_str());
+    EXPECT_FALSE(json.HasErrorCode());
+    json.ClearObject();
+
+	// ErrorCode::ObjectIsEmpty
+    (void)json.GetValue<int>("any");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.AddValue("key", 34);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.AddObject("root");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.AddArray("array", std::vector<int>{1, 2, 3}.data(), 3);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+	(void)json.AddObjectsArray("objects", 2);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    bool boolArr[] = { true, false, true };
+    (void)json.ChangeArray("array", boolArr, 3);
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+	(void)json.ChangeValue("key", "value");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.GetChildObjectCount();
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.GetSizeArray("root");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.RemoveKey("key");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.GetStringDataBuffer();
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+    json.ClearErrorState();
+
+    (void)json.Save();
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::ObjectIsEmpty));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::ObjectIsEmpty), "ObjectIsEmpty");
+
+    json.ClearObject();
+
+    // KeyNotFound
+    json.Open("", JsonCpp::FileAccess::VIRTUAL);
+	json.AddObject("level1");
+	json.Key("level1").AddObject("level2");
+	json.Key("level1").Key("level2").AddValue("key", "value");
+    
+    (void)json.Key("level1").Key("level5").GetValue<std::string>("key");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
+    json.ClearErrorState();
+
+    // KeyNotFound
+    json.SetSringDataBuffer("{\"foo\":123}");
+    (void)json.GetValue<int>("bar");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotFound));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::KeyNotFound), "KeyNotFound");
+    json.ClearErrorState();
+
+    // KeyNotObject
+    json.SetSringDataBuffer("{\"foo\":[1,2,3]}");
+    json.Key("foo").GetValue<int>("foo");
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotObject));
+    json.ClearErrorState();
+
+    // KeyNotArray
+    json.SetSringDataBuffer("{\"foo\":123}");
+    json.Key("foo", 0); // foo is not Array.
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyNotArray));
+    json.ClearErrorState();
+
+    // KeyTypeMismatch
+    json.SetSringDataBuffer("{\"foo\":123}");
+    (void)json.GetValue<std::string>("foo"); // int -> string
+    EXPECT_EQ(json.GetErrorCode(), static_cast<int>(JsonCpp::ErrorCode::KeyTypeMismatch));
+    EXPECT_EQ(json.GetErrorCodeStr(JsonCpp::ErrorCode::KeyTypeMismatch), "KeyTypeMismatch");
+    json.ClearErrorState();
+
+    //// SaveError
+    //// Уже проверено выше через Save() без пути
+
+    //// AccessError  
+    //// Нет прямого публичного способа вызвать, обычно это ошибка доступа к файлу
+
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
