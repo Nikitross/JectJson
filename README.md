@@ -82,17 +82,19 @@ make -j8
 #include <iostream>
 #include <jectjson.h>
 
-static void ErrHandl(const char *message, const char *details) {
-	std::cout << message << " " << details << std::endl;
+static void ErrorHandler(const std::string& func_name, const std::string& msg, JsonCpp::ErrorCode error) {
+	std::cout << func_name << " " << msg << " Error id: " << static_cast<int>(error) << std::endl;
 }
 
 int main() {
+
+	remove("jectjson_example.json");
 		
 	JsonCpp json;
-	json.RegisterCallback_onError(&ErrHandl);
+	json.SetErrorCallback(ErrorHandler);
 	
 	// READ + WRITE + CREATE
-	if (!json.Open("jectjson_examle.json", JsonCpp::FileAccess::RWA)) {
+	if (!json.Open("jectjson_example.json", JsonCpp::FileAccess::RWA)) {
 		fprintf(stderr, "Error - Open json file.");
 	}
 
